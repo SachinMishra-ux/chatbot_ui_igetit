@@ -3,7 +3,7 @@ import requests
 import json
 
 
-#"https://igetitv2-learner-api-dev.myigetit.com/get_llm_answer"
+#"https://igetitv2-learner-api-dev.myigetit.com/chatbot/chatbot/get_llm_answer"
 
 st.set_page_config(page_title="LLM Chat (Non-Streaming)", layout="wide")
 st.title("💬 IGETIT AI Chat Assistant")
@@ -50,7 +50,7 @@ if user_input:
             with st.spinner("Thinking..."):
                 try:
                     response = requests.post(
-                        "http://localhost:8000/chatbot/get_llm_answer",
+                        "https://igetitv2-learner-api-dev.myigetit.com/chatbot/get_llm_answer",
                         headers=headers,
                         data=json.dumps(payload),
                         timeout=60
