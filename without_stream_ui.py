@@ -50,7 +50,7 @@ if user_input:
             with st.spinner("Thinking..."):
                 try:
                     response = requests.post(
-                        "https://igetitv2-learner-api-dev.myigetit.com/chatbot/chatbot/get_llm_answer",
+                        "https://igetitv2-learner-api-dev.myigetit.com/chatbot/get_llm_answer",
                         headers=headers,
                         data=json.dumps(payload),
                         timeout=60
