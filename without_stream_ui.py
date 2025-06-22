@@ -63,44 +63,61 @@ if user_input:
                         answer = result.get("answer", "")
                         sources = result.get("sources", [])
 
-                        # === Timestamp Link Logic ===
-                        timestamp_pattern = r"\[?🕒\s*([0-9]+:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)\]?"
-                        matches = re.findall(timestamp_pattern, answer)
-                        ts_to_url = {}
+                        # === Handle Fallback Message ===
+                        fallback_phrases = [
+                            "doesn’t seem related to your learning material",
+                            "would you like me to run a quick web search",
+                            "i'm not sure about that",
+                            "let me look that up for you"
+                        ]
+                        is_fallback = any(phrase.lower() in answer.lower() for phrase in fallback_phrases)
 
-                        def normalize(ts):
-                            return ts.strip().lstrip("0") if ts.startswith("0") else ts
-
-                        # Build timestamp-to-URL mapping
-                        for ts in set(matches):
-                            for source in sources:
-                                if ts in source.get("content", ""):
-                                    ts_to_url[ts] = source["doc_url"]
-                                    break
-
-                        def linkify(match):
-                            ts = match.group(1)
-                            url = ts_to_url.get(ts)
-                            if url:
-                                return f"[🕒 {ts}]({url})"
-                            return f"🕒 {ts}"
-
-                        # Final answer with hyperlinks
-                        answer_with_links = re.sub(timestamp_pattern, linkify, answer)
-
-                        # === Display Answer ===
-                        st.markdown("### 🤖 Answer")
-                        st.markdown(answer_with_links, unsafe_allow_html=True)
-                        st.session_state.messages.append({"role": "assistant", "content": answer_with_links})
-
-                        # === Source Docs
-                        answer_lower = answer.lower()
-                        if sources and "couldn’t find anything related to" not in answer_lower:
-                            st.markdown("### 📎 Source Documents")
-                            for i, src in enumerate(sources, start=1):
-                                st.markdown(f"{i}. [Document Source {i}]({src['doc_url']})", unsafe_allow_html=True)
-                        else:
+                        if is_fallback:
+                            st.markdown("### 🤖 Answer")
+                            st.markdown(answer)
+                            st.session_state.messages.append({"role": "assistant", "content": answer})
                             st.info("No source documents found.")
+                        else:
+                            # === Timestamp Link Logic ===
+                            timestamp_pattern = r"\[?🕒\s*([0-9]+:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)\]?"
+                            matches = re.findall(timestamp_pattern, answer)
+                            ts_to_url = {}
+
+                            def normalize(ts):
+                                return ts.strip().lstrip("0") if ts.startswith("0") else ts
+
+                            for ts in set(matches):
+                                for source in sources:
+                                    if ts in source.get("content", ""):
+                                        ts_to_url[ts] = source["doc_url"]
+                                        break
+
+                            def linkify(match):
+                                ts = match.group(1)
+                                url = ts_to_url.get(ts)
+                                if url:
+                                    return f"[🕒 {ts}]({url})"
+                                return f"🕒 {ts}"
+
+                            answer_with_links = re.sub(timestamp_pattern, linkify, answer)
+
+                            # === Display Answer ===
+                            st.markdown("### 🤖 Answer")
+                            st.markdown(answer_with_links, unsafe_allow_html=True)
+                            st.session_state.messages.append({"role": "assistant", "content": answer_with_links})
+
+                            # === Source Docs
+                            answer_lower = answer.lower()
+                            if sources and "couldn’t find anything related to" not in answer_lower:
+                                st.markdown("### 📎 Source Documents")
+                                for i, src in enumerate(sources, start=1):
+                                    st.markdown(f"{i}. [Document Source {i}]({src['doc_url']})", unsafe_allow_html=True)
+                            else:
+                                st.info("No source documents found.")
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Connection Error: {e}")
+
 
 
 
