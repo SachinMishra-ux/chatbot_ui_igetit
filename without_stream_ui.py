@@ -119,8 +119,3 @@ if user_input:
                     st.error(f"Connection Error: {e}")
 
 
-
-
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Connection Error: {e}")
-
