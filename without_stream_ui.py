@@ -1,4 +1,4 @@
-#"https://igetitv2-learner-api-dev.myigetit.com/chatbot/chatbot/get_llm_answer"
+#"https://igetitv2-learner-api-dev.myigetit.com/chatbot/get_llm_answer"
 
 import streamlit as st
 import requests
@@ -79,7 +79,8 @@ if user_input:
                             st.info("No source documents found.")
                         else:
                             # === Timestamp Link Logic ===
-                            timestamp_pattern = r"\[?🕒\s*([0-9]+:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)\]?"
+                            timestamp_pattern = r"[\[\(]?\s*🕒?\s*([0-9]+:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?)\s*[\]\)]?"
+
                             matches = re.findall(timestamp_pattern, answer)
                             ts_to_url = {}
 
@@ -117,5 +118,6 @@ if user_input:
 
                 except requests.exceptions.RequestException as e:
                     st.error(f"Connection Error: {e}")
+
 
 
