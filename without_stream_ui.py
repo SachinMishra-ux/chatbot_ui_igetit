@@ -1,123 +1,75 @@
-#"https://igetitv2-learner-api-dev.myigetit.com/chatbot/get_llm_answer"
-
 import streamlit as st
 import requests
 import json
-import re
 
-# === Streamlit App Config ===
-st.set_page_config(page_title="LLM Chat (Non-Streaming)", layout="wide")
-st.title("💬 IGETIT AI Chat Assistant")
+# === Backend Configuration ===
+API_BASE = "https://igetitv2-learner-api-dev.myigetit.com/chatbot"  # Change this to your actual deployment endpoint
 
-# === Session State Initialization ===
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# === Initialize Streamlit session state ===
+st.set_page_config(page_title="IGETIT Chatbot", layout="wide")
 
 if "jwt_token" not in st.session_state:
     st.session_state.jwt_token = ""
 
-# === Sidebar for JWT Token Input ===
-with st.sidebar:
-    st.header("🔐 Authentication")
-    st.session_state.jwt_token = st.text_input("Enter JWT Token", type="password")
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    if st.session_state.jwt_token:
-        st.success("Token loaded")
-    else:
-        st.warning("Please provide a valid JWT token")
+if "session_stored" not in st.session_state:
+    st.session_state.session_stored = False
 
-# === Chat Input ===
-user_input = st.chat_input("Ask a question...")
-if user_input:
+# === Sidebar ===
+st.sidebar.title("🔐 JWT & Session Setup")
+
+# === Input JWT Token ===
+jwt_input = st.sidebar.text_area("Paste your JWT token", height=150)
+if st.sidebar.button("Use This Token"):
+    st.session_state.jwt_token = jwt_input
+    st.sidebar.success("JWT Token set successfully!")
+
+# === Call /store_user_context ===
+if st.sidebar.button("Call /store_user_context"):
     if not st.session_state.jwt_token:
-        st.error("JWT token is required. Please enter it in the sidebar.")
+        st.sidebar.error("Set JWT token first.")
     else:
-        # Add user message to session
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        headers = {"Authorization": f"Bearer {st.session_state.jwt_token}"}
+        payload = {"SubscriptionIDs": []}  # Set valid SubscriptionIDs
+        response = requests.post(f"{API_BASE}/store_user_context", json=payload, headers=headers)
+        if response.status_code == 200:
+            st.session_state.session_stored = True
+            st.sidebar.success("Session stored successfully!")
+        else:
+            st.sidebar.error(f"Error: {response.json().get('detail')}")
 
-        # Display user's message
-        with st.chat_message("user"):
-            st.markdown(user_input)
+# === Main Chat Interface ===
+st.title("💬 IGETIT Coach Chat")
 
-        # === API Call ===
+user_input = st.text_input("Ask a question...", key="input", placeholder="Type your query here...")
+
+if st.button("Send"):
+    if not user_input.strip():
+        st.warning("Please enter a message.")
+    elif not st.session_state.jwt_token:
+        st.warning("Please set JWT token.")
+    elif not st.session_state.session_stored:
+        st.warning("Please store session context.")
+    else:
+        headers = {"Authorization": f"Bearer {st.session_state.jwt_token}"}
         payload = {"question": user_input}
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {st.session_state.jwt_token}"
-        }
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    response = requests.post(
-                        "https://igetitv2-learner-api-dev.myigetit.com/chatbot/get_llm_answer",
-                        headers=headers,
-                        data=json.dumps(payload),
-                        timeout=60
-                    )
+        try:
+            response = requests.post(f"{API_BASE}/get_llm_answer", json=payload, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                st.session_state.messages.append(("user", user_input))
+                st.session_state.messages.append(("bot", data["answer"]))
+            else:
+                st.error(f"Bot Error: {response.json().get('detail')}")
+        except Exception as e:
+            st.error(f"Request failed: {e}")
 
-                    if response.status_code != 200:
-                        st.error(f"API Error: {response.status_code} - {response.text}")
-                    else:
-                        result = response.json()
-                        answer = result.get("answer", "")
-                        sources = result.get("sources", [])
-
-                        # === Handle Fallback Message ===
-                        fallback_phrases = [
-                            "doesn’t seem related to your learning material",
-                            "would you like me to run a quick web search",
-                            "i'm not sure about that",
-                            "let me look that up for you"
-                        ]
-                        is_fallback = any(phrase.lower() in answer.lower() for phrase in fallback_phrases)
-
-                        if is_fallback:
-                            st.markdown("### 🤖 Answer")
-                            st.markdown(answer)
-                            st.session_state.messages.append({"role": "assistant", "content": answer})
-                            st.info("No source documents found.")
-                        else:
-                            # === Timestamp Link Logic ===
-                            timestamp_pattern = r"[\[\(]?\s*🕒?\s*([0-9]+:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?)\s*[\]\)]?"
-
-                            matches = re.findall(timestamp_pattern, answer)
-                            ts_to_url = {}
-
-                            def normalize(ts):
-                                return ts.strip().lstrip("0") if ts.startswith("0") else ts
-
-                            for ts in set(matches):
-                                for source in sources:
-                                    if ts in source.get("content", ""):
-                                        ts_to_url[ts] = source["doc_url"]
-                                        break
-
-                            def linkify(match):
-                                ts = match.group(1)
-                                url = ts_to_url.get(ts)
-                                if url:
-                                    return f"[🕒 {ts}]({url})"
-                                return f"🕒 {ts}"
-
-                            answer_with_links = re.sub(timestamp_pattern, linkify, answer)
-
-                            # === Display Answer ===
-                            st.markdown("### 🤖 Answer")
-                            st.markdown(answer_with_links, unsafe_allow_html=True)
-                            st.session_state.messages.append({"role": "assistant", "content": answer_with_links})
-
-                            # === Source Docs
-                            answer_lower = answer.lower()
-                            if sources and "couldn’t find anything related to" not in answer_lower:
-                                st.markdown("### 📎 Source Documents")
-                                for i, src in enumerate(sources, start=1):
-                                    st.markdown(f"{i}. [Document Source {i}]({src['doc_url']})", unsafe_allow_html=True)
-                            else:
-                                st.info("No source documents found.")
-
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Connection Error: {e}")
-
-
-
+# === Display chat history ===
+for role, msg in st.session_state.messages:
+    if role == "user":
+        st.markdown(f"🧑‍💻 **You:** {msg}")
+    else:
+        st.markdown(f"🤖 **Bot:** {msg}")
